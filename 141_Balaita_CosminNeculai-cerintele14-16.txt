@@ -1,0 +1,82 @@
+
+---14
+---Crearea unei vizualizări complexe
+CREATE VIEW Vizualizare AS
+SELECT f.ID_FILM, f.TITLU, r.NUME AS NUME_REGIZOR, a.NUME AS NUME_ACTOR
+FROM FILM f
+JOIN REGIZOR r ON f.ID_REGIZOR = r.ID_REGIZOR
+JOIN ACTOR a ON r.id_regizor = a.id_regizor;
+
+
+---Dati un exemplu de operatie LMD permisă
+SELECT *
+FROM Vizualizare
+WHERE NUME_REGIZOR = 'SMITH';
+
+---operatie LMD nepermisă
+UPDATE Vizualizare
+SET TITLU = 'New Title'
+WHERE ID_FILM = 1;
+
+---15
+---1 Selectați titlul filmului, numele actorului, numele regizorului și denumirea genului pentru toate înregistrările din tabela FILM. Inclusiv, dacă există, afișați numele regizorului și actorului, chiar dacă nu există o potrivire în tabela REGIZOR și respectiv tabela ACTOR. Asigurați-vă că afișați și denumirea genului, indiferent dacă există o potrivire în tabela GEN.
+SELECT F.TITLU, A.NUME AS NUME_ACTOR, R.NUME AS NUME_REGIZOR, G.DENUMIRE
+FROM FILM F
+LEFT JOIN REGIZOR R ON F.ID_REGIZOR = R.ID_REGIZOR
+LEFT JOIN ACTOR A ON R.ID_REGIZOR = A.ID_REGIZOR
+
+FULL OUTER JOIN GEN G ON F.ID_GEN = G.ID_GEN;
+ 
+---2 Selectați numele cinematografelor în care toți angajații sunt prezenți. Adică, selectați numele cinematografelor pentru care nu există niciun angajat care să lipsească."
+
+SELECT C.NUME
+FROM CINEMATOGRAF C
+WHERE NOT EXISTS (
+    SELECT A.ID_ANGAJAT
+    FROM ANGAJAT A
+    WHERE A.ID_CINEMATOGRAF = C.ID_CINEMATOGRAF
+    AND A.ID_ANGAJAT NOT IN (
+        SELECT A2.ID_ANGAJAT
+        FROM ANGAJAT A2
+        WHERE A2.ID_CINEMATOGRAF = C.ID_CINEMATOGRAF
+    )
+);
+---3 Doresc sa obtine primele 2 filme cu rating cel mai mare
+SELECT * FROM FILM;
+SELECT F.ID_Film, F.Titlu, R.VALOARE
+FROM Film F
+JOIN RATING R ON F.ID_RATING=R.ID_RATING
+ORDER BY r.valoare DESC
+FETCH FIRST 2 ROWS ONLY;
+
+---16 optimizarea unei cereri
+Cerere inițială:
+SELECT C.NUME, COUNT(A.ID_ANGAJAT) AS NUMAR_ANGAJATI
+FROM CINEMATOGRAF C
+LEFT JOIN ANGAJAT A ON C.ID_CINEMATOGRAF = A.ID_CINEMATOGRAF
+GROUP BY C.NUME;
+Expresia algebrică corespunzătoare acestei cereri este:
+γ C.NUME, COUNT(A.ID_ANGAJAT) → NUMAR_ANGAJATI (C ⋈ A)
+
+Arborele algebric corespunzător acestei cereri este:
+            γ C.NUME, COUNT(A.ID_ANGAJAT) → NUMAR_ANGAJATI
+                  |
+                ⋈
+           /           \
+          C             A
+         |               |
+     ID_C              ID_C
+     NUME            ID_ANGAJAT
+                        |
+                      NUME
+În acest exemplu, o optimizare potențială ar fi adăugarea unui index pe coloana ID_CINEMATOGRAF din ambele tabele CINEMATOGRAF și ANGAJAT, pentru a accelera operațiile de join. 
+Cerere optimizată:
+WITH subq AS (
+  SELECT ID_CINEMATOGRAF, COUNT(ID_ANGAJAT) AS NUMAR_ANGAJATI
+  FROM ANGAJAT
+  GROUP BY ID_CINEMATOGRAF
+)
+SELECT C.NUME, COALESCE(subq.NUMAR_ANGAJATI, 0) AS NUMAR_ANGAJATI
+FROM CINEMATOGRAF C
+LEFT JOIN subq ON C.ID_CINEMATOGRAF = subq.ID_CINEMATOGRA
+

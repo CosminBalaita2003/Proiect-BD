@@ -1,0 +1,153 @@
+---12
+
+---SUBCERERI SINCRONIZATE ÎN CARE INTERVIN CEL PU?IN 3 TABELE SI UTILIZAREA A CEL PU?IN 1 BLOC DE CERERE (CLAUZA WITH)
+--- SELECTEAZA TITLUL FILMULUI, NUMELE ACTORILOR SI NUMELE REGIZORILOR,
+WITH FILM_REGIZOR AS (SELECT F.ID_FILM, F.TITLU, R.NUME AS NUME_REGIZOR, R.ID_REGIZOR
+                     FROM FILM F
+                               JOIN REGIZOR R ON F.ID_REGIZOR = R.ID_REGIZOR),
+     FILM_REGIZOR_ACTOR AS (SELECT FR.ID_FILM, FR.TITLU, FR.NUME_REGIZOR, A.NUME AS NUME_ACTOR
+                            FROM FILM_REGIZOR FR
+                                     JOIN ACTOR A ON FR.ID_REGIZOR = A.ID_REGIZOR)
+SELECT *
+FROM FILM_REGIZOR_ACTOR
+ORDER BY ID_FILM;
+
+---SUBCERERI NESINCRONIZATE ÎN CLAUZA FROM UTILIZAND TABELEL CINEMAOGRAF SI ANGAJAT
+--- numărul total de angaja?i pentru fiecare cinematograf.
+WITH subq AS (
+    SELECT ID_CINEMATOGRAF, COUNT(*) AS NUMAR_ANGAJATI
+    FROM ANGAJAT
+    GROUP BY ID_CINEMATOGRAF
+)
+SELECT C.NUME, C.ORAS, subq.NUMAR_ANGAJATI
+FROM CINEMATOGRAF C
+JOIN subq ON C.ID_CINEMATOGRAF = subq.ID_CINEMATOGRAF;
+
+---GRUPĂRI DE DATE CU SUBCERERI NESINCRONIZATE IN CARE INTERVIN CEL PUTIN 3 TABELE, FUNC?II  GRUP, FILTRARE LA NIVEL DE GRUPURI
+---(IN CADRUL ACELEIASI CERERI)
+---subcererea nesincronizată selectează ID-ul genului, denumirea genului, numărul total de filme ?i durata medie a filmelor pentru fiecare gen.
+---Subcererea utilizează tabelele FILM, GEN ?i REGIZOR, realizând jonc?iuni pe baza ID-urilor asociate. 
+---De asemenea, subcererea aplică func?ii de grupare (COUNT, AVG) ?i o condi?ie de filtrare la nivel de grupuri (HAVING), 
+---solicitând ca fiecare gen să aibă cel pu?in 3 filme ?i o durată medie mai mare de 120 de minute.
+WITH subq AS (
+    SELECT F.ID_GEN, G.DENUMIRE, COUNT(*) AS NUMAR_FILME, AVG(F.DURATA) AS DURATA_MEDIE
+    FROM FILM F
+    JOIN GEN G ON F.ID_GEN = G.ID_GEN
+    JOIN REGIZOR R ON F.ID_REGIZOR = R.ID_REGIZOR
+    GROUP BY F.ID_GEN, G.DENUMIRE
+    HAVING COUNT(*) >= 3 AND AVG(F.DURATA) > 120
+)
+SELECT subq.ID_GEN, subq.DENUMIRE, subq.NUMAR_FILME, subq.DURATA_MEDIE
+FROM subq
+ORDER BY subq.NUMAR_FILME DESC;
+
+---ORDONĂRI SI UTILIZAREA FUNC?IILOR NVL ?I DECODE (IN CADRUL ACELEIASI CERERI)
+---ACEASTĂ CERERE VA RETURNA NUMELE CLIEN?ILOR ?I INFORMA?II DESPRE BILETELE LOR. DACĂ NUMELE CLIENTULUI ESTE NUL, SE VA AFI?A
+---'NECUNOSCUT'. DACĂ PRE?UL BILETULUI ESTE NUL, SE VA AFI?A 'NEDETERMINAT', IAR ÎN CAZ CONTRAR SE VA AFI?A 'PRETUL: ' URMAT DE
+---VALOAREA PRE?ULUI. REZULTATELE VOR FI ORDONATE ÎN ORDINE CRESCĂTOARE DUPĂ NUME.
+SELECT NVL(PRENUME, 'NECUNOSCUT')                                      AS NUMECLIENT,
+       DECODE(PRET, NULL, 'NEDETERMINAT', 'PRETUL: ' || TO_CHAR(PRET)) AS INFOBILET
+FROM CLIENTI C
+         LEFT JOIN BILET B ON C.ID_BILET = B.ID_BILET
+ORDER BY NUMECLIENT ASC;
+
+---UTILIZAREA A CEL PU?IN 2 FUNC?II PE ?IRURI DE CARACTERE, 2 FUNC?II PE DATE CALENDARISTICE, A CEL PU?IN UNEI EXPRESII CASE
+---ACEASTA CERERE SELECTEAZA NUMELE ANGAJATILOR DIN TABELA ANGAJAT SI AFISEAZA LUNIGIMEAZA NUMELUI, NUMELE IN MAJUSCULA,DATA NASTERII,
+--- ANUL SI LUNA NASTERII, CATEGORIA DE SALARIU (MIC/MEDIU/MARE)
+SELECT NUME,
+       LENGTH(NUME)                         AS LUNGIME_NUME,
+       UPPER(NUME)                          AS NUME_MARE,
+       TO_CHAR(DATA_NASTERII, 'YYYY-MM-DD') AS DATA_FORMATATA,
+       EXTRACT(YEAR FROM DATA_NASTERII)     AS AN_NASTERE,
+       EXTRACT(MONTH FROM DATA_NASTERII)    AS LUNA_NASTERE,
+       CASE
+           WHEN SALARIU >= 5000 THEN 'SALARIU MARE'
+           WHEN SALARIU >= 3000 THEN 'SALARIU MEDIU'
+           ELSE 'SALARIU MIC'
+           END                              AS CATEGORIE_SALARIU
+FROM ANGAJAT;
+
+
+
+---13
+---Implementarea a 3 opera?ii de actualizare ?i de suprimare a datelor utilizând subcereri
+---actualizare salar pt angajatii care lucreaza in cinematograful 'CINEMA CITY'
+UPDATE ANGAJAT
+SET SALARIU=SALARIU*1.5
+WHERE ID_CINEMATOGRAF = (
+    SELECT ID_CINEMATOGRAF
+    FROM CINEMATOGRAF
+    WHERE UPPER(NUME)='CINEMA CITY');
+
+---reducere pret bilet pt clientii care au ultima litera in prenume i
+SELECT * FROM BILET;
+SELECT * FROM CLIENTI;
+UPDATE BILET
+SET PRET = PRET-5
+WHERE ID_BILET IN(
+    SELECT ID_BILET
+    FROM CLIENTI 
+    WHERE UPPER(PRENUME) LIKE '%I'
+    );
+
+---stergere angajati care lucreaza in cinema-ul de la adresa 2
+SELECT * FROM ANGAJAT;
+DELETE FROM ANGAJAT
+WHERE ID_CINEMATOGRAF IN (
+    SELECT ID_CINEMATOGRAF
+    FROM CINEMATOGRAF
+    WHERE UPPER(ORAS) = 'CLUJ'
+);
+
+---14
+---Crearea unei vizualizări complexe
+CREATE VIEW Vizualizare AS
+SELECT f.ID_FILM, f.TITLU, r.NUME AS NUME_REGIZOR, a.NUME AS NUME_ACTOR
+FROM FILM f
+JOIN REGIZOR r ON f.ID_REGIZOR = r.ID_REGIZOR
+JOIN ACTOR a ON r.id_regizor = a.id_regizor;
+
+
+---Dati un exemplu de operatie LMD permisă
+SELECT *
+FROM Vizualizare
+WHERE NUME_REGIZOR = 'SMITH';
+
+---operatie LMD nepermisă
+UPDATE Vizualizare
+SET TITLU = 'New Title'
+WHERE ID_FILM = 1;
+
+---15
+---1 Selectați titlul filmului, numele actorului, numele regizorului și denumirea genului pentru toate înregistrările din tabela FILM. Inclusiv, dacă există, afișați numele regizorului și actorului, chiar dacă nu există o potrivire în tabela REGIZOR și respectiv tabela ACTOR. Asigurați-vă că afișați și denumirea genului, indiferent dacă există o potrivire în tabela GEN.
+SELECT F.TITLU, A.NUME AS NUME_ACTOR, R.NUME AS NUME_REGIZOR, G.DENUMIRE
+FROM FILM F
+LEFT JOIN REGIZOR R ON F.ID_REGIZOR = R.ID_REGIZOR
+LEFT JOIN ACTOR A ON R.ID_REGIZOR = A.ID_REGIZOR
+
+FULL OUTER JOIN GEN G ON F.ID_GEN = G.ID_GEN;
+ 
+---2 Selectați numele cinematografelor în care toți angajații sunt prezenți. Adică, selectați numele cinematografelor pentru care nu există niciun angajat care să lipsească."
+
+SELECT C.NUME
+FROM CINEMATOGRAF C
+WHERE NOT EXISTS (
+    SELECT A.ID_ANGAJAT
+    FROM ANGAJAT A
+    WHERE A.ID_CINEMATOGRAF = C.ID_CINEMATOGRAF
+    AND A.ID_ANGAJAT NOT IN (
+        SELECT A2.ID_ANGAJAT
+        FROM ANGAJAT A2
+        WHERE A2.ID_CINEMATOGRAF = C.ID_CINEMATOGRAF
+    )
+);
+---3 Doresc sa obtine primele 2 filme cu rating cel mai mare
+SELECT * FROM FILM;
+SELECT F.ID_Film, F.Titlu, R.VALOARE
+FROM Film F
+JOIN RATING R ON F.ID_RATING=R.ID_RATING
+ORDER BY r.valoare DESC
+FETCH FIRST 2 ROWS ONLY;
+
+
+
